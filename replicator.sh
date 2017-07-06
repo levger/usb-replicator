@@ -2,6 +2,8 @@
 TEMPLATE_USB="0:1.4"
 TMP_DIR="/home/pi/tmp"
 
+DEBUG=true
+
 GREEN_PIN=14
 YELLOW_PIN=15
 RED_PIN=18
@@ -20,10 +22,12 @@ while true
 do
     # Select replication mode: clone or just copy
     SWITCH_STATUS="$(./switch.py -p ${SWITCH_PIN})"
-    if [ "${SWITCH_STATUS}" == "0" ]; then
+    if [ "${SWITCH_STATUS}" = "0" ]; then
         CLONE_MODE=false
+        echo "Copy mode"
     else
         CLONE_MODE=true
+        echo "Clone mode"
     fi
 
     # Check if template usb pen drive is connected
@@ -61,7 +65,7 @@ done
 # delete old contents of tmp directory
 echo "Cleaning up ${TMP_DIR}"
 mkdir -p ${TMP_DIR}
-rm -r ${TMP_DIR}/*
+rm -rf ${TMP_DIR}/*
 
 # check for available diskspace
 # df output is in the form:
@@ -73,23 +77,35 @@ RE_ROOT='/dev/root'
 RE_TOTAL_SPACE='\ +\K[0-9]+'
 RE_USED_SPACE='\ +[0-9]+\ +\K[0-9]+'
 RE_AVAILABLE_SPACE='(\ +[0-9]+){2}\ +\K[0-9]+'
-AVAILABLE_SPACE=`df | grep -oP '${RE_ROOT}${RE_AVAILABLE_SPACE}'`
+AVAILABLE_SPACE=`df | grep -oP "${RE_ROOT}${RE_AVAILABLE_SPACE}"`
+echo "Available space: ${AVAILABLE_SPACE}"
 
-if [ ${CLONE_MODE} == false ]; then
-    REQ_SPACE=`df | grep -oP '${TEMPLATE_DEVICE}${RE_USED_SPACE}'`
-    if [ ${AVAILABLE_SPACE} >= ${REQ_SPACE} ]; then
+if [ "${CLONE_MODE}" = false ]; then
+    REQ_SPACE=`df | grep -oP "${TEMPLATE_DEVICE}${RE_USED_SPACE}"`
+    echo "Required space: ${REQ_SPACE}"
+    if [ ${AVAILABLE_SPACE} > ${REQ_SPACE} ]; then
         # copy contents from template usb drive to tmp
         echo "Copying files from template USB drive to ${TMP_DIR}"
-        cp -r ${TEMPLATE_MOUNT}/* ${TMP_DIR}/
+        if [ "${DEBUG}" = false ]; then
+            cp -r ${TEMPLATE_MOUNT}/* ${TMP_DIR}/
+        else
+            echo "DEBUG: cp -r ${TEMPLATE_MOUNT}/* ${TMP_DIR}/"
+        fi
     fi
 else
-    REQ_SPACE=`df | grep -oP '${TEMPLATE_DEVICE}${RE_TOTAL_SPACE}'`
-    if [ ${AVAILABLE_SPACE} >= ${REQ_SPACE} ]; then
+    REQ_SPACE=`df | grep -oP "${TEMPLATE_DEVICE}${RE_TOTAL_SPACE}"`
+    echo "Required space: ${REQ_SPACE}"
+    if [ ${AVAILABLE_SPACE} > ${REQ_SPACE} ]; then
         echo "Cloning files from template USB drive to ${TMP_DIR}/${TEMPLATE_IMAGE_NAME}"
-        dd if=${TEMPLATE_DEVICE} of=${TMP_DIR}/${TEMPLATE_IMAGE_NAME}
+        if [ "${DEBUG}" = false ]; then
+            dd if=${TEMPLATE_DEVICE} of=${TMP_DIR}/${TEMPLATE_IMAGE_NAME}
+        else
+            echo "DEBUG: dd if=${TEMPLATE_DEVICE} of=${TMP_DIR}/${TEMPLATE_IMAGE_NAME}"
+        fi
     fi
 fi
 
+echo "Unmounting template"
 umount ${TEMPLATE_MOUNT}
 
 #####################################################################################################
@@ -107,6 +123,7 @@ do
     # check if any of the inserted usb sticks is actually mounted.
     # only freshly inserted ones are mounted, since we actively unmount all sticks when
     # we are done writing to them.
+    NEED_TO_REPLICATE=false
     while read line
     do
         TARGET_MOUNT=`lsblk -p | grep "$line" | grep -oP '/media/.*'`
@@ -119,7 +136,7 @@ do
         fi
     done <<< ${TARGET_PATHS}
 
-    if [ ${NEED_TO_REPLICATE} == false ]; then
+    if [ "${NEED_TO_REPLICATE}" = false ]; then
         ./led.py -p $RED_PIN -v low
     else
         ./led.py -p $RED_PIN -v high
@@ -128,24 +145,36 @@ do
         while read line
         do
             TARGET_MOUNT=`lsblk -p | grep "$line" | grep -oP '/media/.*'`
+            echo "Target mount: ${TARGET_MOUNT}"
             TARGET_DEVICE=${line}
             echo ${TARGET_MOUNT}
             if [ -z "${TARGET_MOUNT}" ]; then
                 echo "Target was not mounted"
                 continue
             fi
-            if [ ${CLONE_MODE} == false ]; then
-                echo "... Deleting contents in ${TARGET_MOUNT}"
-                rm -r ${TARGET_MOUNT}/*
-                echo "... Copying tmp files to ${TARGET_MOUNT}"
-                cp -r ${TMP_DIR}/* ${TARGET_MOUNT}/
+            if [ "${CLONE_MODE}" = false ]; then
+                if [ "${DEBUG}" = false ]; then
+                    echo "... Deleting contents in ${TARGET_MOUNT}"
+                    rm -rf ${TARGET_MOUNT}/*
+                    echo "... Copying tmp files to ${TARGET_MOUNT}"
+                    cp -r ${TMP_DIR}/* ${TARGET_MOUNT}/
+                else
+                    echo "... Deleting contents in ${TARGET_MOUNT}"
+                    echo "DEBUG: rm -rf ${TARGET_MOUNT}/*"
+                    echo "... Copying tmp files to ${TARGET_MOUNT}"
+                    echo "DEBUG: cp -r ${TMP_DIR}/* ${TARGET_MOUNT}/"
+                fi
                 echo "... Ejecting"
                 umount ${TARGET_MOUNT}
             else
                 echo "... Ejecting before cloning"
                 umount ${TARGET_MOUNT}
                 echo "... Cloning image to ${TARGET_DEVICE}"
-                dd if=${TMP_DIR}/${TEMPLATE_IMAGE_NAME} of=${TARGET_DEVICE}
+                if [ "${DEBUG}" = false ]; then
+                    dd if=${TMP_DIR}/${TEMPLATE_IMAGE_NAME} of=${TARGET_DEVICE}
+                else
+                    echo "DEBUG: dd if=${TMP_DIR}/${TEMPLATE_IMAGE_NAME} of=${TARGET_DEVICE}"
+                fi
             fi
         done <<< ${TARGET_PATHS}
     fi
