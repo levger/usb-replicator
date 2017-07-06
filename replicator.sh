@@ -8,6 +8,7 @@ RED_PIN=18
 SWITCH_PIN=23
 
 CLONE_MODE=false # false: use rm/cp; true: use dd
+TEMPLATE_IMAGE_NAME='template.img'
 
 #####################################################################################################
 ### PHASE 1
@@ -32,14 +33,14 @@ do
         continue
     else
         # input found
-        TEMPLATE_PATH=`echo ${PORT_INFO} | grep -oP 'Device Files: \K/dev/sd.'`
-        TEMPLATE_MOUNT=`lsblk -p | grep "${TEMPLATE_PATH}" | grep -oP '/media/.*'`
-        echo "Template is located in: ${TEMPLATE_PATH}"
+        TEMPLATE_DEVICE=`echo ${PORT_INFO} | grep -oP 'Device Files: \K/dev/sd.'`
+        TEMPLATE_MOUNT=`lsblk -p | grep "${TEMPLATE_DEVICE}" | grep -oP '/media/.*'`
+        echo "Template is located in: ${TEMPLATE_DEVICE}"
 
         # mount template if not mounted already
         if [ -z "$TEMPLATE_MOUNT" ]; then
             echo "Template was not mounted; mounting."
-            udisksctl mount -b ${TEMPLATE_PATH}
+            udisksctl mount -b ${TEMPLATE_DEVICE}
             sleep 1
             continue
         else
@@ -62,12 +63,31 @@ echo "Cleaning up ${TMP_DIR}"
 mkdir -p ${TMP_DIR}
 rm -r ${TMP_DIR}/*
 
+# check for available diskspace
+# df output is in the form:
+# Filesystem    1K-blocks   Used    Available   Use%    Mounted on
+# /dev/root     1234        1234    1234        1234    /
+# ...           ...         ...     ...         ...     ...
+#AVAILABLE_SPACE=`df | grep -oP '/dev/root(\ +[0-9]+){2}\ +\K[0-9]+'`
+RE_ROOT='/dev/root'
+RE_TOTAL_SPACE='\ +\K[0-9]+'
+RE_USED_SPACE='\ +[0-9]+\ +\K[0-9]+'
+RE_AVAILABLE_SPACE='(\ +[0-9]+){2}\ +\K[0-9]+'
+AVAILABLE_SPACE=`df | grep -oP '${RE_ROOT}${RE_AVAILABLE_SPACE}'`
+
 if [ ${CLONE_MODE} == false ]; then
-    # copy contents from template usb drive to tmp
-    echo "Copying files from template USB drive to ${TMP_DIR}"
-    cp -r ${TEMPLATE_MOUNT}/* ${TMP_DIR}/
+    REQ_SPACE=`df | grep -oP '${TEMPLATE_DEVICE}${RE_USED_SPACE}'`
+    if [ ${AVAILABLE_SPACE} >= ${REQ_SPACE} ]; then
+        # copy contents from template usb drive to tmp
+        echo "Copying files from template USB drive to ${TMP_DIR}"
+        cp -r ${TEMPLATE_MOUNT}/* ${TMP_DIR}/
+    fi
 else
-    # TODO dd
+    REQ_SPACE=`df | grep -oP '${TEMPLATE_DEVICE}${RE_TOTAL_SPACE}'`
+    if [ ${AVAILABLE_SPACE} >= ${REQ_SPACE} ]; then
+        echo "Cloning files from template USB drive to ${TMP_DIR}/${TEMPLATE_IMAGE_NAME}"
+        dd if=${TEMPLATE_DEVICE} of=${TMP_DIR}/${TEMPLATE_IMAGE_NAME}
+    fi
 fi
 
 umount ${TEMPLATE_MOUNT}
@@ -108,6 +128,7 @@ do
         while read line
         do
             TARGET_MOUNT=`lsblk -p | grep "$line" | grep -oP '/media/.*'`
+            TARGET_DEVICE=${line}
             echo ${TARGET_MOUNT}
             if [ -z "${TARGET_MOUNT}" ]; then
                 echo "Target was not mounted"
@@ -116,12 +137,14 @@ do
             if [ ${CLONE_MODE} == false ]; then
                 echo "... Copying tmp files to ${TARGET_MOUNT}"
                 cp -r ${TMP_DIR}/* ${TARGET_MOUNT}/
+                echo "... Ejecting"
+                umount ${TARGET_MOUNT}
             else
-                echo "... Cloning image to ${TARGET_MOUNT}"
-                #TODO dd ${TMP_DIR}/image.img ${TARGET_MOUNT}
+                echo "... Ejecting before cloning"
+                umount ${TARGET_MOUNT}
+                echo "... Cloning image to ${TARGET_DEVICE}"
+                dd if=${TMP_DIR}/${TEMPLATE_IMAGE_NAME} of=${TARGET_DEVICE}
             fi
-            echo "... Ejecting"
-            umount ${TARGET_MOUNT}
         done <<< ${TARGET_PATHS}
     fi
 
