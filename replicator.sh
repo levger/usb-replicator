@@ -135,6 +135,8 @@ do
                 continue
             fi
             if [ ${CLONE_MODE} == false ]; then
+                echo "... Deleting contents in ${TARGET_MOUNT}"
+		rm -r ${TARGET_MOUNT}/*
                 echo "... Copying tmp files to ${TARGET_MOUNT}"
                 cp -r ${TMP_DIR}/* ${TARGET_MOUNT}/
                 echo "... Ejecting"
