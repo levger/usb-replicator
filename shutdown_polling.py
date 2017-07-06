@@ -15,4 +15,3 @@ gpio.add_event_detect(btn_pin, gpio.FALLING, callback=shutdown, bouncetime = 200
 
 while 1:
     time.sleep(1)
-
