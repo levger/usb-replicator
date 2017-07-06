@@ -12,7 +12,7 @@ TEMPLATE_IMAGE_NAME='template.img'
 
 #####################################################################################################
 ### PHASE 1
-# check if any device is connected to the specified usb port
+# check if any device is connected to the specified (template) usb port
 # and determine copy/clone mode
 #####################################################################################################
 ./led.py -p $GREEN_PIN -v high
@@ -136,7 +136,7 @@ do
             fi
             if [ ${CLONE_MODE} == false ]; then
                 echo "... Deleting contents in ${TARGET_MOUNT}"
-		rm -r ${TARGET_MOUNT}/*
+                rm -r ${TARGET_MOUNT}/*
                 echo "... Copying tmp files to ${TARGET_MOUNT}"
                 cp -r ${TMP_DIR}/* ${TARGET_MOUNT}/
                 echo "... Ejecting"
