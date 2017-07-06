@@ -9,7 +9,7 @@ YELLOW_PIN=15
 RED_PIN=18
 SWITCH_PIN=23
 
-CLONE_MODE=false # false: use rm/cp; true: use dd
+CLONE_MODE=false # false: use COPY MODE (rm/cp); true: use CLONE MODE (dd)
 TEMPLATE_IMAGE_NAME='template.img'
 
 #####################################################################################################
