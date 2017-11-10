@@ -1,5 +1,5 @@
 #!/bin/bash
-TEMPLATE_USB="0:1.4"
+TEMPLATE_USB_PORT="0:1.4"
 TMP_DIR="/home/pi/tmp"
 
 DEBUG=true
@@ -31,7 +31,7 @@ do
     fi
 
     # Check if template usb pen drive is connected
-    PORT_INFO="$(sudo hwinfo --usb | grep usb-${TEMPLATE_USB})"
+    PORT_INFO="$(sudo hwinfo --usb | grep usb-${TEMPLATE_USB_PORT})"
     if [ -z "$PORT_INFO" ]; then
         # input not found
         continue
